@@ -97,6 +97,75 @@ def _print_retrieval(result) -> None:
             console.print(f"  [cyan]→[/cyan] {c.metadata.get('topic', c.file)}")
 
 
+def _print_eval_report(report) -> None:
+    from rich.table import Table
+    from rich import box as rbox
+
+    colour     = "green" if report.passed else "red"
+    rec_icon   = {"accept": "✅ ACCEPT", "regenerate": "🔄 REGENERATE", "escalate": "🚨 ESCALATE"}.get(
+        report.recommendation.value, report.recommendation.value
+    )
+
+    console.print(Panel.fit(
+        f"[bold {colour}]Stage 4 — Eval Report[/bold {colour}]\n"
+        f"[dim]{report.filepath}[/dim]\n\n"
+        f"Overall Score: [bold {colour}]{report.overall_score:.2f} / 1.00[/bold {colour}]   "
+        f"Recommendation: [bold]{rec_icon}[/bold]",
+        border_style=colour,
+        title="[bold]DeepEval Quality Report[/bold]",
+    ))
+
+    # Metric table
+    table = Table(box=rbox.SIMPLE_HEAD, header_style="bold magenta")
+    table.add_column("Metric",   style="white",  width=35)
+    table.add_column("Score",    style="cyan",   width=8)
+    table.add_column("Status",   width=6)
+    table.add_column("Weight",   style="dim",    width=8)
+
+    WEIGHTS = {
+        "No Hallucinated Methods":  "15%",
+        "Fixture Accuracy":         "10%",
+        "Convention Adherence":      "5%",
+        "Spec Coverage":            "25%",
+        "Assertion Strength":       "15%",
+        "Flow Order Validation":    "15%",
+        "Business Rule Compliance": "15%",
+    }
+    for m in sorted(report.metrics, key=lambda x: x.name):
+        icon = "✅" if m.passed else "❌"
+        table.add_row(m.name, f"{m.score:.2f}", icon, WEIGHTS.get(m.name, "—"))
+    console.print(table)
+
+    if report.issues:
+        console.print("\n[bold yellow]⚠  Issues found:[/bold yellow]")
+        for issue in report.issues[:10]:
+            console.print(f"  [yellow]•[/yellow] {issue[:120]}")
+
+    if report.recommendation.value == "regenerate":
+        console.print(
+            "\n[bold yellow]→ Re-run with --generate to attempt auto-fix[/bold yellow]"
+        )
+    elif report.recommendation.value == "escalate":
+        console.print(
+            "\n[bold red]→ Score too low — manual review required[/bold red]"
+        )
+
+
+def _print_context_coverage(coverage) -> None:
+    level_colour = {"high": "green", "medium": "yellow", "low": "red"}
+    colour = level_colour.get(coverage.level.value, "white")
+    console.print(Panel.fit(
+        f"[bold {colour}]Context Coverage: {coverage.level.value.upper()}[/bold {colour}]\n"
+        f"[dim]{coverage.detail}[/dim]",
+        title="[bold]Pre-Generation Coverage Check[/bold]",
+        border_style=colour,
+    ))
+    if coverage.missing:
+        console.print("[bold yellow]Missing context:[/bold yellow]")
+        for m in coverage.missing:
+            console.print(f"  [yellow]•[/yellow] {m}")
+
+
 def _print_generation(result) -> None:
     if result.is_conflict():
         console.print(Panel.fit(
@@ -175,10 +244,17 @@ def main():
     parser.add_argument("--dry-run",  action="store_true",
                         help="With --generate: show code but don't write to disk")
 
+    # Stage 4 flags
+    parser.add_argument("--eval", action="store_true",
+                        help="Evaluate generated code quality with DeepEval (7 metrics)")
+    parser.add_argument("--eval-file", metavar="PATH",
+                        help="Evaluate a specific already-generated test file")
+
     args = parser.parse_args()
 
     if not any([args.ticket, args.excel, args.text,
-                args.index, args.search, args.api]):
+                args.index, args.search, args.api,
+                getattr(args, "eval_file", None)]):
         parser.print_help()
         sys.exit(1)
 
@@ -268,6 +344,22 @@ def main():
         # Show retrieval summary even when generating
         _print_retrieval(retrieval)
 
+        # ── Pre-generation: context coverage check ─────────────────────────
+        if args.generate or args.eval:
+            from ai_agent.stage4_eval.context_checker import check_coverage
+            from ai_agent.stage4_eval.models import CoverageLevel
+            coverage = check_coverage(spec.affected_pages, retrieval)
+            _print_context_coverage(coverage)
+
+            if coverage.level == CoverageLevel.LOW:
+                console.print(
+                    "\n[bold red]⚠ LOW context coverage — generation may produce "
+                    "unreliable tests.\nConsider adding a page object and updating "
+                    "knowledge/ YAML files before generating.[/bold red]"
+                )
+                if not args.generate:
+                    return
+
         # ── Stage 3: generate ──────────────────────────────────────────────
         if args.generate:
             from ai_agent.stage3_generator.generator_agent import GeneratorAgent
@@ -299,6 +391,32 @@ def main():
                     f"{updated} test case(s) marked as [green]Automated[/green] "
                     f"in '{args.excel}'"
                 )
+
+            # ── Stage 4: eval (if --eval also passed) ──────────────────────
+            if args.eval and result.success and not dry_run:
+                from ai_agent.stage4_eval.eval_agent import EvalAgent
+                console.print("\n[bold cyan]Running Stage 4 — Eval…[/bold cyan]")
+                eval_agent = EvalAgent()
+                report     = eval_agent.evaluate(
+                    filepath=result.filepath,
+                    spec=spec,
+                    excel_path=args.excel,
+                    sheet_name=args.sheet,
+                )
+                _print_eval_report(report)
+
+        # ── Stage 4 standalone: --eval-file ───────────────────────────────
+        elif getattr(args, "eval_file", None):
+            from ai_agent.stage4_eval.eval_agent import EvalAgent
+            console.print("[bold cyan]Running Stage 4 — Eval (standalone)…[/bold cyan]")
+            eval_agent = EvalAgent()
+            report     = eval_agent.evaluate(
+                filepath=args.eval_file,
+                spec=spec,
+                excel_path=args.excel,
+                sheet_name=args.sheet,
+            )
+            _print_eval_report(report)
 
     except EnvironmentError as e:
         console.print(f"[bold red]Config error:[/bold red] {e}")
