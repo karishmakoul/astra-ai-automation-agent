@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Agent — File Dependency Map</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --border:#2d3250; --accent:#8be9fd; --text:#cdd6f4; --muted:#6c7086; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; padding:2.5rem; }
+  h1 { font-size:2rem; color:#fff; text-align:center; margin-bottom:.3rem; }
+  .sub { text-align:center; color:var(--muted); font-size:.9rem; margin-bottom:.6rem; }
+  .badge-wrap { text-align:center; margin-bottom:2.5rem; }
+  .badge { display:inline-block; background:#1f2d3d; color:#8be9fd; padding:.15rem .7rem; border-radius:20px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:2rem; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+  .card-title { font-size:1.1rem; font-weight:700; color:var(--accent); margin-bottom:.3rem; }
+  .card-desc { color:var(--muted); font-size:.85rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .mermaid { background:#181b2e; border-radius:8px; padding:1.5rem; overflow-x:auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border); }
+  .legend-item { display:flex; align-items:center; gap:.4rem; font-size:.82rem; color:var(--muted); }
+  .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .nav { text-align:center; margin-top:2rem; color:var(--muted); font-size:.82rem; }
+  .nav a { color:#8be9fd; text-decoration:none; margin:0 .5rem; }
+  .nav a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<h1>🤖 AI Automation Agent</h1>
+<p class="sub">File Dependency &amp; Data Contract Map</p>
+<div class="badge-wrap"><span class="badge">📐 Diagram 3 of 4 — File Dependency Map</span></div>
+
+<div class="card">
+  <div class="card-title">Which File Imports Which — Data Contracts Between Modules</div>
+  <div class="card-desc">
+    Shows every file's responsibilities, which files import which, and exactly what data type travels
+    on each arrow. Dashed lines (→ used by) show Pydantic model consumption.
+    Solid lines show direct function calls / imports.
+  </div>
+
+  <div class="mermaid">
+flowchart TD
+    CLI["📄 cli.py\nmain()\n─────────────\n_print_spec()\n_print_retrieval()\n_print_generation()"]
+
+    CFG["📄 config.py\nAgentConfig\n─────────────\nOPENAI_API_KEY\nOPENAI_MODEL\nJIRA_SERVER / ADO_ORG\nhas_jira() · has_ado()"]
+
+    MOD["📄 models.py\nPydantic Contracts\n─────────────\nTestSpec\nTestCase\nPriority (enum)\nTestType (enum)\nInputSource (enum)"]
+
+    subgraph STAGE1["⚙️  STAGE 1 — PARSE"]
+        PA["📄 parser_agent.py\nparse()\n─────────────\n_detect_ticket_source()"]
+
+        subgraph READERS["Readers — one chosen at runtime"]
+            R_XL["📄 excel_reader.py\nread_excel()\nupdate_status_in_excel()\n─────────────\nopenpyxl · PatternFill"]
+            R_JR["📄 jira_reader.py\nread_jira_ticket()\n─────────────\nJira REST API"]
+            R_AD["📄 ado_reader.py\nread_ado_ticket()\n─────────────\nADO REST API"]
+            R_TX["📄 text_reader.py\nread_text()\n─────────────\npasses raw text"]
+        end
+
+        EX["📄 extractor.py\nextract_test_spec()\n─────────────\nOpenAI chat.completions\nresponse_format=json_object\nJSON → TestSpec"]
+
+        PA --> R_XL & R_JR & R_AD & R_TX
+        R_JR --> EX
+        R_AD --> EX
+        R_TX --> EX
+    end
+
+    subgraph STAGE2["🔍  STAGE 2 — RAG CONTEXT"]
+        IDX["📄 indexer.py\nIndexer.index_all()\n─────────────\n_index_code()\n_index_tests()\n_index_knowledge()\n_get_git_last_modified()\n_should_skip()"]
+
+        CHK["📄 chunker.py\nchunk_python_file()\n─────────────\nCodeChunk (dataclass)\n_classify_file()\n_method_signature()\n_get_source_segment()"]
+
+        CDB[("🗄 ChromaDB\nvector_store/\n─────────────\ncode_index\ntest_index\nknow_index")]
+
+        RET["📄 retriever.py\nRetriever.retrieve()\n─────────────\nRetrievedChunk (dataclass)\nRetrievalResult (dataclass)\nsearch()\nget_page_object_api()\ndetect_conflicts()\ncontext_for_prompt()"]
+
+        ST["📦 sentence-transformers\nall-MiniLM-L6-v2\n384-dim local embeddings"]
+
+        YAML["📁 knowledge/\nbusiness_rules.yaml\nnavigation_flows.yaml\nuser_types.yaml"]
+
+        IDX -->|"chunk_python_file(path)"| CHK
+        CHK -->|"CodeChunk[]"| IDX
+        YAML -->|"yaml.safe_load()"| IDX
+        IDX -->|"model.encode() + upsert"| CDB
+        IDX -->|"model.encode()"| ST
+        RET -->|"model.encode(query)"| ST
+        ST -->|"384-dim vector"| CDB
+        CDB -->|"top-k chunks + metadata"| RET
+    end
+
+    subgraph STAGE3["✨  STAGE 3 — GENERATE"]
+        GA["📄 generator_agent.py\nGeneratorAgent.generate()\n─────────────\n_strip_markdown()\n_check_syntax() via ast\n_determine_filepath()"]
+
+        PB["📄 prompt_builder.py\nSYSTEM_PROMPT (const)\nbuild_user_message()\n─────────────\n① TestSpec section\n② RetrievalResult section\n③ Task instructions"]
+
+        TL["📄 tools.py\nTOOL_SCHEMAS (4 defs)\ndispatch_tool()\n─────────────\ntool_read_file()\ntool_list_page_methods()\ntool_get_fixtures()\ntool_search_context()"]
+
+        OAI["☁️ OpenAI GPT-4o\nchat.completions.create()\n─────────────\ntool_choice = auto\nmax_tokens = 8096"]
+
+        GA -->|"build_user_message(spec, retrieval)"| PB
+        PB -->|"user_message: str"| GA
+        GA -->|"messages + TOOL_SCHEMAS"| OAI
+        OAI -->|"finish_reason=tool_calls\ntc.function.name + arguments"| GA
+        GA -->|"dispatch_tool(name, inputs)"| TL
+        TL -->|"tool result: str"| GA
+        TL -->|"search_context() calls"| RET
+        OAI -->|"finish_reason=stop\ncontent: Python code"| GA
+    end
+
+    OUT1["📄 tests/ambitionbox/\ntest_*_generated.py\n─────────────\nPytest class + methods\nAllure decorators\nreal fixture names"]
+
+    OUT2["📊 Excel\nAmbitionBox_Test_Cases.xlsx\n─────────────\nstatus → Automated\nfill → GREEN #C6EFCE"]
+
+    %% ── Top-level wiring ──────────────────────────────────────────
+    CLI -->|"reads key"| CFG
+    CLI -->|"parse()"| PA
+    PA -->|"TestSpec"| CLI
+    R_XL -->|"TestSpec"| PA
+    EX -->|"TestSpec"| PA
+
+    CLI -->|"Retriever.retrieve()"| RET
+    RET -->|"RetrievalResult"| CLI
+
+    CLI -->|"generate(TestSpec, RetrievalResult)"| GA
+    GA -->|"GenerationResult"| CLI
+
+    CLI -->|"write_text(code)"| OUT1
+    CLI -->|"update_status_in_excel()"| R_XL
+    R_XL --> OUT2
+
+    %% ── Pydantic model consumption (dashed) ───────────────────────
+    MOD -.->|"TestSpec\nTestCase"| PA
+    MOD -.->|"TestSpec\nTestCase"| R_XL
+    MOD -.->|"TestSpec"| EX
+    MOD -.->|"TestSpec"| GA
+    MOD -.->|"TestSpec"| PB
+    CFG -.->|"OPENAI_API_KEY"| EX
+    CFG -.->|"OPENAI_API_KEY\nOPENAI_MODEL"| GA
+
+    %% ── Styles ────────────────────────────────────────────────────
+    classDef cli     fill:#2d2836,stroke:#bd93f9,color:#f8f8f2,font-weight:bold
+    classDef s1      fill:#2d2620,stroke:#ffb86c,color:#f8f8f2
+    classDef s2      fill:#1f2d3d,stroke:#8be9fd,color:#f8f8f2
+    classDef s3      fill:#2a1f3d,stroke:#bd93f9,color:#f8f8f2
+    classDef store   fill:#1a2535,stroke:#8be9fd,color:#f8f8f2,font-style:italic
+    classDef model   fill:#1f3228,stroke:#50fa7b,color:#f8f8f2
+    classDef out     fill:#1f3228,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+    classDef api     fill:#3d1f2a,stroke:#ff79c6,color:#f8f8f2
+    classDef ext     fill:#252535,stroke:#6272a4,color:#cdd6f4
+
+    class CLI cli
+    class MOD model
+    class OUT1,OUT2 out
+    class CDB store
+    class OAI api
+    class ST,YAML ext
+    class PA,R_XL,R_JR,R_AD,R_TX,EX s1
+    class IDX,CHK,RET s2
+    class GA,PB,TL s3
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:#bd93f9"></div> CLI / Config</div>
+    <div class="legend-item"><div class="dot" style="background:#ffb86c"></div> Stage 1 — Parse</div>
+    <div class="legend-item"><div class="dot" style="background:#8be9fd"></div> Stage 2 — RAG</div>
+    <div class="legend-item"><div class="dot" style="background:#bd93f9; opacity:.6"></div> Stage 3 — Generate</div>
+    <div class="legend-item"><div class="dot" style="background:#ff79c6"></div> OpenAI API</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b"></div> Pydantic Models / Outputs</div>
+    <div class="legend-item"><div class="dot" style="background:#6272a4"></div> External Libraries</div>
+    <div class="legend-item" style="font-style:italic">── dashed arrows = Pydantic model consumed by file</div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="02_low_level_sequence.html">← Previous: Low Level Sequence</a>
+  <a href="04_anti_hallucination_tool_loop.html">→ Next: Anti-Hallucination Tool Loop</a>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad:true, theme:'dark',
+  themeVariables:{ background:'#181b2e', primaryColor:'#2d3250', primaryTextColor:'#cdd6f4',
+    primaryBorderColor:'#8be9fd', lineColor:'#6272a4', edgeLabelBackground:'#1a1d27', fontSize:'13px' },
+  flowchart:{ curve:'basis', padding:20 }
+});
+</script>
+</body>
+</html>

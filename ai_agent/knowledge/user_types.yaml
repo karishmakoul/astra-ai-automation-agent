@@ -1,0 +1,36 @@
+user_types:
+
+  guest:
+    description: "User who is not logged in. Sees Login button in header."
+    how_to_test_as: "Open a fresh browser session without logging in."
+    restrictions:
+      - Cannot write company reviews (login modal appears)
+      - Cannot apply to jobs (login modal appears)
+      - Cannot create job alerts (login modal appears)
+      - Salary figures are blurred — Unlock button shown instead of exact values
+      - Cannot access My Company or My Role feed tabs
+      - Cannot share interview experiences
+    visible_elements:
+      - Login button in header (data-testid=login)
+      - Search bar
+      - All public company listings
+      - All public reviews (but not salary details)
+    assertions_for_guest:
+      - Login button must be visible
+      - Clicking salary unlock must show login modal
+      - Clicking Write a Review must show login modal
+
+  authenticated:
+    description: "User who is logged in with email or phone."
+    how_to_test_as: "Log in with test credentials before running the test."
+    additional_access:
+      - Can write company reviews
+      - Can apply to jobs
+      - Can create job alerts
+      - Can see exact salary figures
+      - Can access My Company and My Role feed tabs
+      - Can share interview experiences
+    visible_elements:
+      - Profile avatar/icon instead of Login button
+      - Notification bell
+      - Message icon

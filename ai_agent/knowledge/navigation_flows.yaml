@@ -1,0 +1,134 @@
+navigation_flows:
+
+  home_page:
+    url: "/"
+    base_url: "https://www.ambitionbox.com"
+    entry_points:
+      - Direct URL navigation
+    key_elements:
+      - Search bar (data-testid=desktop-typeahead) at top
+      - Left navigation panel (data-testid=left-navigation-bar)
+      - Home feed tabs: Popular, My Company, My Role
+    navigation_from_here:
+      - Companies: click nav-group-link-companies
+      - Reviews: click nav-group-link-reviews
+      - Salaries: click nav-group-link-salaries
+      - Interviews: click nav-group-link-interview-questions
+      - Jobs: click nav-group-link-jobs
+      - Compare: via Tools section (nav-group-toggle-tools → nav-menu-item)
+    known_issues:
+      - Home feed coachmark overlay (data-testid=home-feed-tabs-coachmark-overlay)
+        blocks clicks on first visit — must be dismissed before interacting
+    fixture: home_page
+
+  companies_page:
+    url: "/list-of-companies"
+    entry_points:
+      - Direct URL navigation
+      - Home page left nav Companies link
+    filter_mechanism:
+      type: "Vue 2 bottom sheet"
+      how_to_open: "Click top-bar chip button (button[data-testid=filterChip-{name}])"
+      how_to_select_option: "JS label click (dispatchEvent MouseEvent)"
+      how_to_apply: "JS click Apply button via Vue __vue__.handleClick()"
+      how_to_clear: "Open All Filters (allFilters-desktop) → Clear All"
+    available_filters:
+      - Experience
+      - Remote
+      - Location
+      - Metro cities
+      - Salary
+      - Industry
+      - Rating
+      - Known For
+      - Featured
+      - Size
+      - Badges
+      - Type
+    sort_options:
+      - Popular (default)
+      - Top Paying (via URL param sortBy=topPaying)
+    filter_state: "Client-side Vue state — NOT reflected in URL params except sort"
+    known_issues:
+      - Filter state lost on page navigation (client-side only)
+      - Apply button requires Vue handleClick(), not native click()
+    fixture: companies_page
+
+  reviews_page:
+    url: "/reviews/{company_slug}-reviews"
+    example_url: "/reviews/tcs-reviews"
+    entry_points:
+      - Direct URL navigation
+      - Companies page → click company card → Reviews sub-tab
+    filter_mechanism:
+      type: "Dropdown filters above review list"
+      filters:
+        - Department
+        - Designation
+        - Location
+        - Overall Rating
+    sort_options:
+      - Popular (default)
+      - Latest
+      - Detailed
+    rating_sections:
+      - Overall rating (X.X/5)
+      - Gender split: by Women, by Men
+      - Category breakdown: Job Security, Work-Life Balance, Company Culture,
+          Skill Development, Work Satisfaction, Salary, Promotions
+    special_sections:
+      - AI summary from recent reviews
+      - Work policies (WFO%, days, flexibility%)
+      - HIGHLY RATED FOR / CRITICALLY RATED FOR attributes
+    known_issues:
+      - Page loads with domcontentloaded but requires extra 2s wait for reviews
+    fixture: reviews_page
+
+  salaries_page:
+    url: "/salaries"
+    company_url: "/salaries/{company_slug}-salaries"
+    entry_points:
+      - Direct URL navigation
+      - Home page left nav Salaries link
+    search_mechanism:
+      container: "data-testid=desktop-typeahead"
+      input: "data-testid=desktop-typeahead input"
+    salary_data:
+      - Exact figures require login (Unlock button for guests)
+      - Shows range: min/max per year in lakhs (₹ L/yr format)
+      - Data is self-reported by employees
+    popular_roles_section: "Links to salary data for top job profiles"
+    calculator_section:
+      inputs: [company, designation, annual_salary]
+      output: in-hand (take-home) monthly/annual salary with breakdown
+    fixture: salaries_page
+
+  interviews_page:
+    url: "/interviews"
+    company_url: "/interviews/{company_slug}-interview-questions"
+    search_mechanism:
+      container: "data-testid=desktop-typeahead"
+      input: "data-testid=desktop-typeahead input"
+    card_data:
+      - Interview rounds (Technical, HR, etc.)
+      - Difficulty: Easy / Medium / Hard
+      - Outcome: Selected / Rejected / On Hold
+    stats: "8L+ experiences, 1L+ companies, 25K+ job profiles"
+    fixture: interviews_page
+
+  jobs_page:
+    url: "/jobs"
+    filter_mechanism:
+      type: "Separate filter UI — different from companies page"
+      url_params:
+        workMode: "remote | hybrid | onsite"
+        sort: "latest | relevance"
+    card_data:
+      - Job title
+      - Company name + rating
+      - Experience required
+      - Location
+      - Employment type
+      - Salary (if disclosed)
+      - Days since posted
+    fixture: jobs_page

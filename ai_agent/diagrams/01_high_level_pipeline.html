@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Agent — High Level Pipeline</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --border:#2d3250; --accent:#7c83fd; --text:#cdd6f4; --muted:#6c7086; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; padding:2.5rem; }
+  h1 { font-size:2rem; color:#fff; text-align:center; margin-bottom:.3rem; }
+  .sub { text-align:center; color:var(--muted); font-size:.9rem; margin-bottom:.6rem; }
+  .badge { display:inline-block; background:#2d3a6e; color:#7c83fd; padding:.15rem .7rem; border-radius:20px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .badge-wrap { text-align:center; margin-bottom:2.5rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:2rem; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+  .card-title { font-size:1.1rem; font-weight:700; color:var(--accent); margin-bottom:.3rem; }
+  .card-desc { color:var(--muted); font-size:.85rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .mermaid { background:#181b2e; border-radius:8px; padding:1.5rem; overflow-x:auto; }
+  .legend { display:flex; flex-wrap:wrap; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border); }
+  .legend-item { display:flex; align-items:center; gap:.4rem; font-size:.82rem; color:var(--muted); }
+  .dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+  .nav { text-align:center; margin-top:2rem; color:var(--muted); font-size:.82rem; }
+  .nav a { color:#7c83fd; text-decoration:none; margin:0 .5rem; }
+  .nav a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<h1>🤖 AI Automation Agent</h1>
+<p class="sub">Architecture Overview</p>
+<div class="badge-wrap"><span class="badge">📐 Diagram 1 of 4 — High Level Pipeline</span></div>
+
+<div class="card">
+  <div class="card-title">End-to-End Pipeline Overview</div>
+  <div class="card-desc">
+    The 3 pipeline stages with their major inputs, components, and outputs.
+    Read left → right. Each stage feeds into the next via a typed Pydantic model.
+  </div>
+
+  <div class="mermaid">
+flowchart LR
+    subgraph IN["📥  INPUTS"]
+        direction TB
+        I1["🎫 Jira / ADO\nTicket ID"]
+        I2["📊 Excel\nTest Cases Sheet"]
+        I3["✏️ Free-text\nDescription"]
+    end
+
+    subgraph S1["⚙️  STAGE 1 — PARSE"]
+        direction TB
+        P1["parser_agent.py\n(Router)"]
+        P2["Reader\n(Jira / ADO / Excel / Text)"]
+        P3["extractor.py\n(GPT-4o → JSON)"]
+        P4[["TestSpec\nPydantic Model"]]
+        P1 --> P2 --> P3 --> P4
+    end
+
+    subgraph S2["🔍  STAGE 2 — RAG CONTEXT"]
+        direction TB
+        R1["indexer.py\n(Build once / refresh)"]
+        R2["chunker.py\n(AST method-level chunks)"]
+        R3[("ChromaDB\nVector Store\n3 collections")]
+        R4["retriever.py\n(Semantic search)"]
+        R5[["RetrievalResult\n(code + tests + knowledge)"]]
+        R1 --> R2 --> R3
+        R4 -->|query| R3
+        R3 -->|top-k chunks| R4
+        R4 --> R5
+    end
+
+    subgraph S3["✨  STAGE 3 — GENERATE"]
+        direction TB
+        G1["generator_agent.py\n(Agentic loop)"]
+        G2["prompt_builder.py\n(System + user prompt)"]
+        G3["GPT-4o API\n(function-calling enabled)"]
+        G4["tools.py\n(list_page_methods\nget_fixtures\nread_file\nsearch_context)"]
+        G5[["Generated\nPytest File"]]
+        G1 --> G2 --> G3
+        G3 -->|"tool_calls\n(max 10 rounds)"| G4
+        G4 -->|tool results| G3
+        G3 -->|"finish_reason=stop"| G5
+    end
+
+    subgraph OUT["📤  OUTPUTS"]
+        direction TB
+        O1["tests/ambitionbox/\ntest_*_generated.py"]
+        O2["✅ Excel status\n→ Automated (green)"]
+    end
+
+    subgraph KB["📚  KNOWLEDGE BASE"]
+        direction TB
+        K1["business_rules.yaml"]
+        K2["navigation_flows.yaml"]
+        K3["user_types.yaml"]
+    end
+
+    IN  --> S1
+    S1  -->|TestSpec| S2
+    S1  -->|TestSpec| S3
+    S2  -->|RetrievalResult| S3
+    KB  -->|indexed into| R3
+    S3  --> OUT
+
+    classDef model  fill:#1f3228,stroke:#50fa7b,color:#f8f8f2
+    classDef input  fill:#2d2620,stroke:#ffb86c,color:#f8f8f2
+    classDef store  fill:#1f2d3d,stroke:#8be9fd,color:#f8f8f2
+    classDef apibox fill:#3d1f2a,stroke:#ff79c6,color:#f8f8f2
+    classDef kb     fill:#232d1f,stroke:#50fa7b,stroke-dasharray:4 2,color:#f8f8f2
+
+    class P4,R5,G5 model
+    class I1,I2,I3 input
+    class R3 store
+    class G3,P3 apibox
+    class K1,K2,K3 kb
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:#ffb86c"></div> User Inputs</div>
+    <div class="legend-item"><div class="dot" style="background:#7c83fd"></div> Processing Components</div>
+    <div class="legend-item"><div class="dot" style="background:#ff79c6"></div> GPT-4o API Call</div>
+    <div class="legend-item"><div class="dot" style="background:#8be9fd"></div> ChromaDB Vector Store</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b"></div> Pydantic Model Outputs</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b; opacity:.5"></div> Knowledge Base (YAML, dashed)</div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="02_low_level_sequence.html">→ Next: Low Level Sequence Diagram</a>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad:true, theme:'dark',
+  themeVariables:{ background:'#181b2e', primaryColor:'#2d3250', primaryTextColor:'#cdd6f4',
+    primaryBorderColor:'#7c83fd', lineColor:'#6272a4', edgeLabelBackground:'#1a1d27', fontSize:'14px' },
+  flowchart:{ curve:'basis', padding:20 }
+});
+</script>
+</body>
+</html>

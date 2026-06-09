@@ -1,0 +1,101 @@
+business_rules:
+
+  authentication:
+    salary_visibility:
+      rule: "Exact salary figures require login"
+      behaviour: "Guest users see Unlock button or blurred values. Login modal appears on click."
+      pages: [salaries_page, reviews_page, company_detail]
+      test_pattern: "click unlock → assert login modal visible"
+
+    review_writing:
+      rule: "Writing a review requires authentication"
+      behaviour: "Clicking Write a Review as guest triggers login modal"
+      pages: [reviews_page]
+
+    job_application:
+      rule: "Applying to jobs requires authentication"
+      behaviour: "Clicking Apply as guest triggers login modal"
+      pages: [jobs_page]
+
+    job_alert:
+      rule: "Creating job alerts requires authentication"
+      behaviour: "Clicking Create Job Alert as guest triggers login modal"
+      pages: [jobs_page]
+
+  filters:
+    state_persistence:
+      rule: "Filter state is client-side only on Companies page"
+      behaviour: >
+        Filters applied on the Companies page are stored in Vue component state.
+        Navigating away and returning resets all filters.
+        Sort order IS preserved via URL param (sortBy=topPaying).
+      pages: [companies_page]
+
+    filter_result_change:
+      rule: "Applying any filter must change the visible results"
+      behaviour: >
+        After applying a filter, the set of companies/jobs shown must differ
+        from the unfiltered set. If the same companies appear, the filter had
+        no effect (possible test data issue or filter not applied correctly).
+      assertion: "filtered_results != default_results"
+
+    clear_all_resets:
+      rule: "Clear All resets to the same default state"
+      behaviour: >
+        After Clear All, the page must show exactly the same companies as
+        when first loaded (before any filter was applied).
+      assertion: "reset_results == initial_default_results"
+
+  ratings:
+    scale:
+      rule: "All ratings are on a 1.0–5.0 scale"
+      behaviour: "No rating should be outside the range [1.0, 5.0]"
+
+    gender_split:
+      rule: "Women and Men ratings are almost always different"
+      behaviour: >
+        The gender-split ratings (by Women, by Men) represent different
+        sub-populations and typically differ by at least 0.1.
+        A test that asserts they must differ is valid.
+
+    category_consistency:
+      rule: "CRITICALLY RATED FOR attributes match the lowest category scores"
+      behaviour: >
+        Categories labelled as CRITICALLY RATED FOR are those with the
+        lowest numerical scores in the breakdown table.
+        Salary and Promotions are consistently critically rated for TCS.
+
+  navigation:
+    coachmark_overlay:
+      rule: "Coachmark overlay must be dismissed before nav interactions on home page"
+      behaviour: >
+        On first load of the home page, a tutorial overlay
+        (data-testid=home-feed-tabs-coachmark-overlay) covers the entire screen.
+        All navigation clicks will fail until this overlay is dismissed.
+      fix: "overlay.click(force=True) then wait_for state=hidden"
+
+    back_navigation:
+      rule: "Browser back from company detail returns to companies list"
+      behaviour: >
+        After clicking a company card on /list-of-companies and navigating to
+        the detail page, pressing browser back returns to /list-of-companies.
+        Filter state is NOT preserved.
+
+  data_quality:
+    review_count_format:
+      rule: "Review counts use shorthand notation"
+      behaviour: "Counts are shown as 1.2L (1.2 lakh = 120,000), 74.1k, etc."
+
+    salary_format:
+      rule: "Salaries are shown in Lakh per year (₹ L/yr)"
+      behaviour: "e.g. ₹9 L/yr - ₹10 L/yr — always in lakhs, never in thousands"
+
+    ci_vs_cd:
+      rule: "Live site data changes frequently"
+      behaviour: >
+        AmbitionBox has live user-contributed data. Review counts, salary ranges,
+        and company ratings change daily. Tests must not assert exact values —
+        only ranges, existence, or relative comparisons.
+      example:
+        bad:  "assert rating == 3.3"
+        good: "assert 1.0 <= rating <= 5.0"

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Agent — Low Level Sequence</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --border:#2d3250; --accent:#50fa7b; --text:#cdd6f4; --muted:#6c7086; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; padding:2.5rem; }
+  h1 { font-size:2rem; color:#fff; text-align:center; margin-bottom:.3rem; }
+  .sub { text-align:center; color:var(--muted); font-size:.9rem; margin-bottom:.6rem; }
+  .badge-wrap { text-align:center; margin-bottom:2.5rem; }
+  .badge { display:inline-block; background:#1f3228; color:#50fa7b; padding:.15rem .7rem; border-radius:20px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:2rem; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+  .card-title { font-size:1.1rem; font-weight:700; color:var(--accent); margin-bottom:.3rem; }
+  .card-desc { color:var(--muted); font-size:.85rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .card-desc code { background:#252535; padding:.1rem .35rem; border-radius:4px; font-family:monospace; color:#8be9fd; }
+  .mermaid { background:#181b2e; border-radius:8px; padding:1.5rem; overflow-x:auto; }
+  .nav { text-align:center; margin-top:2rem; color:var(--muted); font-size:.82rem; }
+  .nav a { color:#50fa7b; text-decoration:none; margin:0 .5rem; }
+  .nav a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<h1>🤖 AI Automation Agent</h1>
+<p class="sub">Full Sequence — File-by-File Function Calls</p>
+<div class="badge-wrap"><span class="badge">📐 Diagram 2 of 4 — Low Level Sequence</span></div>
+
+<div class="card">
+  <div class="card-title">File-by-File Function Call Sequence</div>
+  <div class="card-desc">
+    Traces every function call across every file for the full pipeline command:<br/>
+    <code>python -m ai_agent.cli --excel AmbitionBox_Test_Cases.xlsx --sheet "Salaries Page" --generate</code><br/><br/>
+    Grouped into 4 colour-coded sections: Stage 1 (parse), Stage 2 (retrieve), Stage 3 (generate), Post-generation (Excel update).
+  </div>
+
+  <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User
+    participant CLI   as cli.py<br/>main()
+    participant CFG   as config.py<br/>AgentConfig
+    participant PA    as parser_agent.py<br/>parse()
+    participant XR    as excel_reader.py<br/>read_excel()
+    participant IDX   as indexer.py<br/>Indexer
+    participant CHK   as chunker.py<br/>chunk_python_file()
+    participant CDB   as ChromaDB<br/>(vector_store/)
+    participant RET   as retriever.py<br/>Retriever
+    participant GA    as generator_agent.py<br/>GeneratorAgent
+    participant PB    as prompt_builder.py<br/>build_user_message()
+    participant TL    as tools.py<br/>dispatch_tool()
+    participant GPT   as OpenAI<br/>GPT-4o API
+    participant XRUP  as excel_reader.py<br/>update_status_in_excel()
+
+    User->>CLI: python -m ai_agent.cli<br/>--excel … --sheet … --generate
+
+    rect rgb(45, 38, 32)
+        Note over CLI,PA: ── STAGE 1 : PARSE ──
+        CLI->>PA: parse(excel_path, sheet_name)
+        PA->>XR: read_excel(file, sheet,<br/>status_filter="To Be Automated")
+        XR->>XR: openpyxl.load_workbook() [read_only]
+        XR->>XR: iter_rows() → skip header → filter by status
+        XR-->>PA: TestSpec (list[TestCase] with IDs, steps, priority)
+        PA-->>CLI: TestSpec
+        CLI->>CLI: _print_spec(spec)
+    end
+
+    rect rgb(25, 45, 40)
+        Note over CLI,CDB: ── STAGE 2 : RAG RETRIEVAL ──
+        CLI->>RET: Retriever()
+        RET->>RET: SentenceTransformer("all-MiniLM-L6-v2").load()
+        RET->>CDB: get_or_create_collection(code_index,<br/>test_index, know_index)
+        CLI->>RET: retrieve(query=spec.title + description,<br/>affected_pages=spec.affected_pages)
+
+        rect rgb(20, 35, 30)
+            Note over RET,CDB: Phase 1 — Page Object Methods (code_index)
+            RET->>CDB: query(embedding, where={chunk_type: page_object})
+            CDB-->>RET: top-k CodeChunks (method signatures + source)
+        end
+
+        rect rgb(20, 35, 30)
+            Note over RET,CDB: Phase 2 — Similar Tests (test_index)
+            RET->>CDB: query(embedding)
+            CDB-->>RET: top-k test chunks + git_last_modified metadata
+            RET->>RET: classify each: verified / stale_candidate / unknown
+        end
+
+        rect rgb(20, 35, 30)
+            Note over RET,CDB: Phase 3 — Business Knowledge (know_index)
+            RET->>CDB: query(embedding)
+            CDB-->>RET: YAML knowledge chunks (rules, navigation, user types)
+        end
+
+        rect rgb(20, 35, 30)
+            Note over RET: Phase 4 — Conflict Detection
+            RET->>RET: detect_conflicts(all_chunks)<br/>compare overlapping topics
+        end
+
+        RET-->>CLI: RetrievalResult (page_object_methods,<br/>similar_tests, knowledge,<br/>stale_warnings, conflicts)
+        CLI->>CLI: _print_retrieval(result)
+    end
+
+    rect rgb(42, 32, 55)
+        Note over CLI,GPT: ── STAGE 3 : GENERATE (Agentic Loop) ──
+        CLI->>CFG: AgentConfig.validate()<br/>→ assert OPENAI_API_KEY present
+        CLI->>GA: GeneratorAgent()
+        GA->>GA: OpenAI(api_key=OPENAI_API_KEY)
+        CLI->>GA: generate(spec, retrieval, dry_run=False)
+        GA->>GA: retrieval.has_conflicts() → abort if True
+
+        GA->>PB: build_user_message(spec, retrieval)
+        PB->>PB: format TestSpec section (IDs, steps, ACs)
+        PB->>PB: format RetrievalResult section (context_for_prompt)
+        PB->>PB: format Task Instructions ("call tools first")
+        PB-->>GA: user_message (str)
+        GA->>GA: messages = [system=SYSTEM_PROMPT, user=user_message]
+
+        loop Agentic Tool Loop — max 10 rounds
+            GA->>GPT: chat.completions.create(model=gpt-4o,<br/>tools=TOOL_SCHEMAS, tool_choice=auto)
+
+            alt finish_reason == "tool_calls"
+                GPT-->>GA: tool_call (function.name + JSON arguments)
+                GA->>TL: dispatch_tool(name, inputs)
+
+                alt tool == "get_fixtures"
+                    TL->>TL: ast.parse(conftest.py)<br/>walk → find @pytest.fixture decorators<br/>extract name + args
+                    TL-->>GA: fixture list with signatures
+                else tool == "list_page_methods"
+                    TL->>TL: _find_file(page_name)<br/>ast.parse() → ClassDef walk<br/>skip private (_) methods<br/>build sig + return type + docstring
+                    TL-->>GA: public method signatures
+                else tool == "read_file"
+                    TL->>TL: PROJECT_ROOT / path → .exists() check<br/>.read_text(encoding=utf-8)
+                    TL-->>GA: raw file source
+                else tool == "search_context"
+                    TL->>RET: retriever.search(query, n)
+                    RET->>CDB: query all 3 collections
+                    CDB-->>RET: top-n chunks
+                    RET-->>TL: formatted chunk text
+                    TL-->>GA: search results
+                end
+
+                GA->>GA: messages.append(assistant_msg)<br/>messages.append(tool_results)
+                Note over GA: → next round
+            else finish_reason == "stop"
+                GPT-->>GA: raw Python code (content text)
+                GA->>GA: _strip_markdown(raw_code)<br/>remove ``` fences if present
+                GA->>GA: _check_syntax(code)<br/>ast.parse() → SyntaxError?
+                GA->>GA: _determine_filepath(spec)<br/>affected_pages[0] → test_{page}_generated.py
+                GA->>GA: Path(filepath).write_text(code)
+                GA-->>CLI: GenerationResult(success=True,<br/>code, filepath,<br/>tool_calls_made, tokens_used)
+            end
+        end
+
+        CLI->>CLI: _print_generation(result)
+    end
+
+    rect rgb(28, 45, 32)
+        Note over CLI,XRUP: ── POST-GENERATION : EXCEL STATUS UPDATE ──
+        CLI->>XRUP: update_status_in_excel(file, sheet,<br/>tc_ids=[tc.id for tc in spec.test_cases],<br/>new_status="Automated")
+        XRUP->>XRUP: openpyxl.load_workbook() [write mode]
+        XRUP->>XRUP: iter_rows(min_row=2)<br/>match col-A value in tc_id_set
+        XRUP->>XRUP: cell.value = "Automated"<br/>cell.fill = GREEN (#C6EFCE)<br/>cell.font = dark green
+        XRUP->>XRUP: wb.save(path) → wb.close()
+        XRUP-->>CLI: updated_count (int)
+        CLI->>User: ✓ N test case(s) marked Automated in Excel
+    end
+  </div>
+</div>
+
+<div class="nav">
+  <a href="01_high_level_pipeline.html">← Previous: High Level Pipeline</a>
+  <a href="03_file_dependency_map.html">→ Next: File Dependency Map</a>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad:true, theme:'dark',
+  themeVariables:{ background:'#181b2e', primaryColor:'#2d3250', primaryTextColor:'#cdd6f4',
+    primaryBorderColor:'#50fa7b', lineColor:'#6272a4', edgeLabelBackground:'#1a1d27', fontSize:'13px' },
+  sequence:{ actorMargin:55, messageMargin:18, mirrorActors:false, boxTextMargin:8 }
+});
+</script>
+</body>
+</html>

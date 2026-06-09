@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Agent — Anti-Hallucination Tool Loop</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root { --bg:#0f1117; --card:#1a1d27; --border:#2d3250; --accent:#ff79c6; --text:#cdd6f4; --muted:#6c7086; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; padding:2.5rem; }
+  h1 { font-size:2rem; color:#fff; text-align:center; margin-bottom:.3rem; }
+  .sub { text-align:center; color:var(--muted); font-size:.9rem; margin-bottom:.6rem; }
+  .badge-wrap { text-align:center; margin-bottom:2.5rem; }
+  .badge { display:inline-block; background:#3d1f2a; color:#ff79c6; padding:.15rem .7rem; border-radius:20px; font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:2rem; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+  .card-title { font-size:1.1rem; font-weight:700; color:var(--accent); margin-bottom:.3rem; }
+  .card-desc { color:var(--muted); font-size:.85rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid var(--border); }
+  .mermaid { background:#181b2e; border-radius:8px; padding:1.5rem; overflow-x:auto; }
+  .rules { margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border); }
+  .rules h3 { font-size:.9rem; color:#ff79c6; margin-bottom:.8rem; }
+  .rule { display:flex; gap:.6rem; margin-bottom:.5rem; font-size:.83rem; color:var(--muted); }
+  .rule-num { background:#3d1f2a; color:#ff79c6; width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; flex-shrink:0; }
+  .nav { text-align:center; margin-top:2rem; color:var(--muted); font-size:.82rem; }
+  .nav a { color:#ff79c6; text-decoration:none; margin:0 .5rem; }
+  .nav a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<h1>🤖 AI Automation Agent</h1>
+<p class="sub">Stage 3 — Anti-Hallucination Agentic Tool Loop</p>
+<div class="badge-wrap"><span class="badge">📐 Diagram 4 of 4 — Tool Loop Deep Dive</span></div>
+
+<div class="card">
+  <div class="card-title">How GPT-4o Is Prevented From Inventing Method Names</div>
+  <div class="card-desc">
+    Deep-dive into the generator_agent.py agentic loop. The model must verify every page object method
+    and fixture name via tool calls before it is allowed to write any test code.
+    Max 10 tool-call rounds enforced; conflicts abort before any API call is made.
+  </div>
+
+  <div class="mermaid">
+flowchart TD
+    START(["GeneratorAgent.generate(spec, retrieval, dry_run)"])
+
+    CHK_CONFLICT{"retrieval\n.has_conflicts()?"}
+    ABORT(["Return GenerationResult\nsuccess = False\nconflicts = [...]\nerror = human review needed"])
+
+    BUILD["prompt_builder.py → build_user_message(spec, retrieval)\n──────────────────────────────────\n① TestSpec section — TC IDs · steps · acceptance criteria\n② Retrieved context — real code + similar tests + business rules\n③ Task instructions — 'call tools BEFORE writing any code'"]
+
+    INIT_MSG["messages = [\n  {role: system, content: SYSTEM_PROMPT},\n  {role: user,   content: user_message}\n]"]
+
+    API_CALL["OpenAI GPT-4o\nchat.completions.create(\n  model = gpt-4o,\n  tools = TOOL_SCHEMAS,\n  tool_choice = auto,\n  max_tokens = 8096\n)"]
+
+    CHK_STOP{"choice\n.finish_reason?"}
+
+    STOP_TOOL["finish_reason\n== tool_calls"]
+    STOP_END["finish_reason\n== stop"]
+    STOP_OTHER["finish_reason\n== length / filter"]
+
+    subgraph TOOL_EXEC["tools.py — dispatch_tool(name, inputs)"]
+        T1{"tool\nname?"}
+
+        T_GF["get_fixtures()\n────────────────────\nast.parse(conftest.py)\nwalk → find @pytest.fixture\nunwrap ast.Call decorators\nextract func name + args\nreturn fixture list"]
+
+        T_LM["list_page_methods(page_name)\n────────────────────\n_find_file(page_name)\n  → pages/ · components/ · core/\nast.parse() → ClassDef\nskip private _ methods\nbuild sig + return hint + docstring\nreturn method catalogue"]
+
+        T_RF["read_file(path)\n────────────────────\nPROJECT_ROOT / path\nassert .py extension\n.read_text(utf-8)\nreturn raw source"]
+
+        T_SC["search_context(query, n)\n────────────────────\nRetriever.search(query, n)\n  → embed query\n  → ChromaDB query (3 collections)\n  → rank by score\nreturn formatted top-n chunks"]
+
+        T1 -->|get_fixtures| T_GF
+        T1 -->|list_page_methods| T_LM
+        T1 -->|read_file| T_RF
+        T1 -->|search_context| T_SC
+    end
+
+    APPEND["messages.append({role: assistant, content: choice.message})\nfor each tool_call:\n  messages.append({role: tool, tool_call_id: tc.id, content: result})"]
+
+    ROUND_CHK{"round_num\n< MAX_TOOL_ROUNDS\n(10)?"}
+    MAX_REACHED(["Return GenerationResult\nsuccess = False\nerror = max rounds exceeded"])
+
+    EXTRACT["raw_code = choice.message.content.strip()"]
+
+    CHK_EMPTY{"raw_code\nempty?"}
+    EMPTY_ERR(["Return GenerationResult\nsuccess = False\nerror = empty output"])
+
+    CHK_CONFLICT2{"starts with\nCONFLICT:?"}
+    CONFLICT_ERR(["Return GenerationResult\nsuccess = False\nconflicts = conflict_lines"])
+
+    STRIP["_strip_markdown(raw_code)\n→ remove ``` fences if present"]
+
+    SYNTAX["_check_syntax(code)\nast.parse(code)\n→ SyntaxError?"]
+    SYN_FAIL(["Return GenerationResult\nsuccess = False\ncode = code\nerror = SyntaxError line N"])
+
+    FILEPATH["_determine_filepath(spec)\naffected_pages[0].lower().replace(' ','_')\n→ tests/ambitionbox/test_{page}_generated.py"]
+
+    DRY{"dry_run?"}
+    WRITE["Path(filepath)\n  .parent.mkdir(parents=True)\n  .write_text(code, utf-8)"]
+    SKIP["(skip write\nreturn code only)"]
+
+    XRUP["update_status_in_excel()\nopenpyxl write mode\nmatch TC ID in col A\ncell.value = Automated\ncell.fill = GREEN #C6EFCE\nwb.save()"]
+
+    DONE(["Return GenerationResult\nsuccess = True ✅\ncode · filepath\ntool_calls_made\ntokens_used · warnings"])
+
+    %% ── Flow ──────────────────────────────────────────────────────
+    START --> CHK_CONFLICT
+    CHK_CONFLICT -->|Yes| ABORT
+    CHK_CONFLICT -->|No| BUILD --> INIT_MSG --> API_CALL --> CHK_STOP
+
+    CHK_STOP --> STOP_TOOL & STOP_END & STOP_OTHER
+
+    STOP_TOOL --> TOOL_EXEC
+    TOOL_EXEC --> APPEND --> ROUND_CHK
+    ROUND_CHK -->|Yes ↺| API_CALL
+    ROUND_CHK -->|No| MAX_REACHED
+
+    STOP_END --> EXTRACT --> CHK_EMPTY
+    CHK_EMPTY -->|Yes| EMPTY_ERR
+    CHK_EMPTY -->|No| CHK_CONFLICT2
+    CHK_CONFLICT2 -->|Yes| CONFLICT_ERR
+    CHK_CONFLICT2 -->|No| STRIP --> SYNTAX
+    SYNTAX -->|Error| SYN_FAIL
+    SYNTAX -->|Valid| FILEPATH --> DRY
+    DRY -->|No| WRITE --> XRUP --> DONE
+    DRY -->|Yes| SKIP --> DONE
+
+    STOP_OTHER --> EXTRACT
+
+    %% ── Styles ────────────────────────────────────────────────────
+    classDef startend fill:#2a1f3d,stroke:#bd93f9,color:#f8f8f2,font-weight:bold,rx:8
+    classDef decision fill:#1f2d3d,stroke:#8be9fd,color:#f8f8f2
+    classDef tool     fill:#2d2620,stroke:#ffb86c,color:#f8f8f2,font-size:12px
+    classDef success  fill:#1f3228,stroke:#50fa7b,color:#f8f8f2
+    classDef fail     fill:#3d1f1f,stroke:#ff5555,color:#f8f8f2
+    classDef api      fill:#3d1f2a,stroke:#ff79c6,color:#f8f8f2
+    classDef action   fill:#1e2235,stroke:#6272a4,color:#cdd6f4
+
+    class START startend
+    class DONE success
+    class ABORT,MAX_REACHED,SYN_FAIL,EMPTY_ERR,CONFLICT_ERR fail
+    class CHK_CONFLICT,CHK_STOP,T1,ROUND_CHK,SYNTAX,CHK_EMPTY,CHK_CONFLICT2,DRY decision
+    class T_GF,T_LM,T_RF,T_SC tool
+    class API_CALL api
+    class BUILD,INIT_MSG,APPEND,EXTRACT,STRIP,FILEPATH,WRITE,SKIP,XRUP,STOP_TOOL,STOP_END,STOP_OTHER action
+  </div>
+
+  <div class="rules">
+    <h3>🛡️ Anti-Hallucination Rules enforced by SYSTEM_PROMPT</h3>
+    <div class="rule"><div class="rule-num">1</div><span>ALWAYS call <strong>list_page_methods()</strong> for every page/component before writing any test code. Never assume a method exists.</span></div>
+    <div class="rule"><div class="rule-num">2</div><span>ALWAYS call <strong>get_fixtures()</strong> before deciding which fixtures to use. Never invent fixture names.</span></div>
+    <div class="rule"><div class="rule-num">3</div><span>If a method does not appear in list_page_methods() output — use a different existing method or add a <strong># TODO: add method()</strong> comment instead.</span></div>
+    <div class="rule"><div class="rule-num">4</div><span>NEVER use <code>page.locator()</code>, <code>page.goto()</code>, or any raw Playwright API directly in tests. All browser actions go through page object methods.</span></div>
+    <div class="rule"><div class="rule-num">5</div><span>DO NOT assert exact counts or exact text from live data. Always assert <strong>existence · ranges · relative comparisons · pattern matches</strong>.</span></div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="03_file_dependency_map.html">← Previous: File Dependency Map</a>
+  <a href="01_high_level_pipeline.html">↑ Back to Start: High Level Pipeline</a>
+</div>
+
+<script>
+mermaid.initialize({
+  startOnLoad:true, theme:'dark',
+  themeVariables:{ background:'#181b2e', primaryColor:'#2d3250', primaryTextColor:'#cdd6f4',
+    primaryBorderColor:'#ff79c6', lineColor:'#6272a4', edgeLabelBackground:'#1a1d27', fontSize:'13px' },
+  flowchart:{ curve:'basis', padding:20 }
+});
+</script>
+</body>
+</html>

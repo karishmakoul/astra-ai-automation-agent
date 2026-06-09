@@ -1,0 +1,46 @@
+# ── Secrets & credentials (NEVER commit) ────────────────────────────────────
+.env
+.env.*
+!.env.example          # keep the example template
+config/.env.local
+config/.env.staging
+config/.env.production
+ai_agent/.env
+!ai_agent/.env.example # keep the example template
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+*.egg
+
+# ── AI Agent — local data (large / machine-specific, rebuild with --index) ───
+ai_agent/vector_store/
+ai_agent/outputs/
+
+# ── Reports & test artifacts ─────────────────────────────────────────────────
+reports/allure-results/
+reports/allure-report/
+reports/screenshots/
+test-results/
+playwright-report/
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+
+# ── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Claude Code internal ─────────────────────────────────────────────────────
+.claude/

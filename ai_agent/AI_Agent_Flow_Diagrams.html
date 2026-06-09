@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Automation Agent — Flow Diagrams</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --border: #2d3250;
+    --accent: #7c83fd;
+    --accent2: #50fa7b;
+    --accent3: #ffb86c;
+    --text: #cdd6f4;
+    --muted: #6c7086;
+    --heading: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  h1 {
+    font-size: 2rem;
+    color: var(--heading);
+    text-align: center;
+    margin-bottom: 0.4rem;
+    letter-spacing: -0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    margin-bottom: 3rem;
+  }
+  .section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 3rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+  }
+  .section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section-desc {
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .mermaid {
+    background: #181b2e;
+    border-radius: 8px;
+    padding: 1.5rem;
+    overflow-x: auto;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .tag-hl  { background:#2d3a6e; color:#7c83fd; }
+  .tag-ll  { background:#2d4a3e; color:#50fa7b; }
+</style>
+</head>
+<body>
+
+<h1>🤖 AI Automation Agent</h1>
+<p class="subtitle">Architecture &amp; Data Flow — High Level &amp; Low Level</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 1 — HIGH LEVEL                                       -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="tag tag-hl">High Level</span>
+    End-to-End Pipeline Overview
+  </div>
+  <div class="section-desc">
+    Shows the 3 pipeline stages, major inputs, key components per stage, and outputs.
+    Read left → right. Each stage feeds into the next.
+  </div>
+  <div class="mermaid">
+flowchart LR
+    %% ── Inputs ──────────────────────────────────────
+    subgraph IN["📥  INPUTS"]
+        direction TB
+        I1["🎫 Jira / ADO\nTicket ID"]
+        I2["📊 Excel\nTest Cases Sheet"]
+        I3["✏️ Free-text\nDescription"]
+    end
+
+    %% ── Stage 1 ──────────────────────────────────────
+    subgraph S1["⚙️  STAGE 1 — PARSE"]
+        direction TB
+        P1["parser_agent.py\n(Router)"]
+        P2["Reader\n(Jira / ADO / Excel / Text)"]
+        P3["extractor.py\n(GPT-4o → JSON)"]
+        P4[["TestSpec\nPydantic Model"]]
+        P1 --> P2 --> P3 --> P4
+    end
+
+    %% ── Stage 2 ──────────────────────────────────────
+    subgraph S2["🔍  STAGE 2 — RAG CONTEXT"]
+        direction TB
+        R1["indexer.py\n(Build once / refresh)"]
+        R2["chunker.py\n(AST method-level chunks)"]
+        R3[("ChromaDB\nVector Store\n3 collections")]
+        R4["retriever.py\n(Semantic search)"]
+        R5[["RetrievalResult\n(code + tests + knowledge)"]]
+        R1 --> R2 --> R3
+        R4 -->|query| R3
+        R3 -->|top-k chunks| R4
+        R4 --> R5
+    end
+
+    %% ── Stage 3 ──────────────────────────────────────
+    subgraph S3["✨  STAGE 3 — GENERATE"]
+        direction TB
+        G1["generator_agent.py\n(Agentic loop)"]
+        G2["prompt_builder.py\n(System + user prompt)"]
+        G3["GPT-4o API\n(tool_use enabled)"]
+        G4["tools.py\n(list_page_methods\nget_fixtures\nread_file\nsearch_context)"]
+        G5[["Generated\nPytest File"]]
+        G1 --> G2 --> G3
+        G3 -->|"tool_calls\n(max 10 rounds)"| G4
+        G4 -->|tool results| G3
+        G3 -->|"finish_reason=stop"| G5
+    end
+
+    %% ── Outputs ──────────────────────────────────────
+    subgraph OUT["📤  OUTPUTS"]
+        direction TB
+        O1["tests/ambitionbox/\ntest_*_generated.py"]
+        O2["✅ Excel status\nupdated → Automated"]
+    end
+
+    %% ── Knowledge ────────────────────────────────────
+    subgraph KB["📚  KNOWLEDGE BASE"]
+        direction TB
+        K1["business_rules.yaml"]
+        K2["navigation_flows.yaml"]
+        K3["user_types.yaml"]
+    end
+
+    %% ── Connections ──────────────────────────────────
+    IN  --> S1
+    S1  -->|TestSpec| S2
+    S1  -->|TestSpec| S3
+    S2  -->|RetrievalResult| S3
+    KB  -->|indexed into| R3
+    S3  --> OUT
+
+    %% ── Styles ───────────────────────────────────────
+    classDef stage fill:#1e2235,stroke:#7c83fd,stroke-width:2px,color:#cdd6f4
+    classDef model fill:#2a1f3d,stroke:#bd93f9,color:#cdd6f4
+    classDef store fill:#1f2d3d,stroke:#8be9fd,color:#cdd6f4
+    classDef output fill:#1f3228,stroke:#50fa7b,color:#cdd6f4
+    classDef input fill:#2d2620,stroke:#ffb86c,color:#cdd6f4
+    classDef kb fill:#232d1f,stroke:#50fa7b,stroke-dasharray:4 2,color:#cdd6f4
+
+    class P4,R5,G5 output
+    class I1,I2,I3 input
+    class R3 store
+    class G3,P3 model
+    class K1,K2,K3 kb
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:#ffb86c"></div> User Inputs</div>
+    <div class="legend-item"><div class="dot" style="background:#7c83fd"></div> Processing Components</div>
+    <div class="legend-item"><div class="dot" style="background:#bd93f9"></div> GPT-4o API Call</div>
+    <div class="legend-item"><div class="dot" style="background:#8be9fd"></div> ChromaDB Vector Store</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b"></div> Outputs / Pydantic Models</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b; opacity:0.5"></div> Knowledge Base (YAML)</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 2 — LOW LEVEL: SEQUENCE                              -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="tag tag-ll">Low Level</span>
+    Full Sequence — File-by-File Function Calls
+  </div>
+  <div class="section-desc">
+    Traces every function call across every file for the most common path:
+    <code>python -m ai_agent.cli --excel … --sheet … --generate</code>.
+    Dashed lines = async / tool-loop iterations.
+  </div>
+  <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor User
+    participant CLI   as cli.py<br/>main()
+    participant CFG   as config.py<br/>AgentConfig
+    participant PA    as parser_agent.py<br/>parse()
+    participant XR    as excel_reader.py<br/>read_excel()
+    participant IDX   as indexer.py<br/>Indexer
+    participant CHK   as chunker.py<br/>chunk_python_file()
+    participant CDB   as ChromaDB<br/>(vector_store/)
+    participant RET   as retriever.py<br/>Retriever
+    participant GA    as generator_agent.py<br/>GeneratorAgent
+    participant PB    as prompt_builder.py<br/>build_user_message()
+    participant TL    as tools.py<br/>dispatch_tool()
+    participant GPT   as OpenAI<br/>GPT-4o API
+    participant XRUP  as excel_reader.py<br/>update_status_in_excel()
+
+    User->>CLI: python -m ai_agent.cli<br/>--excel … --sheet … --generate
+
+    rect rgb(30, 35, 60)
+        Note over CLI,PA: ── STAGE 1: PARSE ──
+        CLI->>PA: parse(excel_path, sheet_name)
+        PA->>XR: read_excel(file, sheet, status_filter="To Be Automated")
+        XR->>XR: openpyxl.load_workbook() [read_only]
+        XR->>XR: iter_rows() → filter by status
+        XR-->>PA: TestSpec (list[TestCase] with IDs, steps, priority)
+        PA-->>CLI: TestSpec
+        CLI->>CLI: _print_spec(spec)
+    end
+
+    rect rgb(25, 40, 35)
+        Note over CLI,CDB: ── STAGE 2: RAG RETRIEVAL ──
+        CLI->>RET: Retriever()
+        RET->>RET: SentenceTransformer("all-MiniLM-L6-v2").load()
+        RET->>CDB: get_or_create_collection(code_index, test_index, know_index)
+        CLI->>RET: retrieve(query=spec.title, affected_pages)
+
+        rect rgb(20, 30, 25)
+            Note over RET,CDB: Phase 1 — Page Object Methods
+            RET->>CDB: code_index.query(embedding, where={chunk_type:page_object})
+            CDB-->>RET: top-k CodeChunks (method signatures)
+        end
+
+        rect rgb(20, 30, 25)
+            Note over RET,CDB: Phase 2 — Similar Tests
+            RET->>CDB: test_index.query(embedding)
+            CDB-->>RET: top-k test chunks + staleness metadata
+            RET->>RET: classify: verified / stale_candidate / unknown
+        end
+
+        rect rgb(20, 30, 25)
+            Note over RET,CDB: Phase 3 — Business Knowledge
+            RET->>CDB: know_index.query(embedding)
+            CDB-->>RET: YAML knowledge chunks
+        end
+
+        rect rgb(20, 30, 25)
+            Note over RET: Phase 4 — Conflict Detection
+            RET->>RET: detect_conflicts(all_chunks)
+        end
+
+        RET-->>CLI: RetrievalResult (page_object_methods, similar_tests,<br/>knowledge, stale_warnings, conflicts)
+        CLI->>CLI: _print_retrieval(result)
+    end
+
+    rect rgb(35, 25, 50)
+        Note over CLI,GPT: ── STAGE 3: GENERATE (Agentic Loop) ──
+        CLI->>CFG: AgentConfig.validate() → check OPENAI_API_KEY
+        CLI->>GA: GeneratorAgent()
+        GA->>GA: OpenAI(api_key=OPENAI_API_KEY)
+
+        CLI->>GA: generate(spec, retrieval, dry_run=False)
+        GA->>GA: check retrieval.has_conflicts() → abort if True
+
+        GA->>PB: build_user_message(spec, retrieval)
+        PB->>PB: format TestSpec section (TC IDs, steps, priority)
+        PB->>PB: format RetrievalResult section (context_for_prompt)
+        PB->>PB: format Task Instructions
+        PB-->>GA: user_message (str)
+
+        GA->>GA: messages = [system=SYSTEM_PROMPT, user=user_message]
+
+        loop Agentic Tool Loop (max 10 rounds)
+            GA->>GPT: chat.completions.create(model=gpt-4o,<br/>tools=TOOL_SCHEMAS, tool_choice=auto)
+
+            alt finish_reason == "tool_calls"
+                GPT-->>GA: tool_call (name + JSON arguments)
+                GA->>TL: dispatch_tool(name, inputs)
+
+                alt tool == "get_fixtures"
+                    TL->>TL: ast.parse(conftest.py)<br/>find @pytest.fixture decorators
+                    TL-->>GA: fixture names + signatures
+                else tool == "list_page_methods"
+                    TL->>TL: _find_file(page_name)<br/>ast.parse() → extract public methods
+                    TL-->>GA: method signatures + docstrings
+                else tool == "read_file"
+                    TL->>TL: PROJECT_ROOT / path → read_text()
+                    TL-->>GA: raw file content
+                else tool == "search_context"
+                    TL->>RET: retriever.search(query, n)
+                    RET->>CDB: query embeddings
+                    CDB-->>RET: chunks
+                    RET-->>TL: formatted results
+                    TL-->>GA: search results
+                end
+
+                GA->>GA: messages.append(assistant_msg + tool_results)
+                Note over GA: next iteration →
+            else finish_reason == "stop"
+                GPT-->>GA: raw Python code (text)
+                GA->>GA: _strip_markdown(raw_code)
+                GA->>GA: _check_syntax(code) via ast.parse()
+                GA->>GA: _determine_filepath(spec)
+                GA->>GA: Path(filepath).write_text(code)
+                GA-->>CLI: GenerationResult(success, code, filepath,<br/>tool_calls_made, tokens_used)
+            end
+        end
+
+        CLI->>CLI: _print_generation(result)
+    end
+
+    rect rgb(30, 40, 25)
+        Note over CLI,XRUP: ── POST-GENERATION: EXCEL UPDATE ──
+        CLI->>XRUP: update_status_in_excel(file, sheet, tc_ids, "Automated")
+        XRUP->>XRUP: openpyxl.load_workbook() [write mode]
+        XRUP->>XRUP: iter_rows() → match TC ID → set status cell
+        XRUP->>XRUP: apply GREEN fill + font (C6EFCE)
+        XRUP->>XRUP: wb.save(path)
+        XRUP-->>CLI: updated_count (int)
+        CLI->>User: ✓ N test cases marked Automated in Excel
+    end
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 3 — LOW LEVEL: FILE DEPENDENCY MAP                   -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="tag tag-ll">Low Level</span>
+    File Dependency &amp; Data Contract Map
+  </div>
+  <div class="section-desc">
+    Shows which files import which, what data objects flow between them,
+    and where each Pydantic model is produced vs consumed.
+  </div>
+  <div class="mermaid">
+flowchart TD
+    %% ── Entry ────────────────────────────────────────
+    CLI["📄 cli.py\nmain()"]
+
+    %% ── Config ───────────────────────────────────────
+    CFG["📄 config.py\nAgentConfig\n─────────────\nOPENAI_API_KEY\nOPENAI_MODEL\nJIRA / ADO creds"]
+
+    %% ── Models ───────────────────────────────────────
+    MOD["📄 models.py\nPydantic Contracts\n─────────────\nTestSpec\nTestCase\nPriority (enum)\nTestType (enum)\nInputSource (enum)"]
+
+    %% ── Stage 1 ──────────────────────────────────────
+    subgraph STAGE1["STAGE 1 — PARSE"]
+        PA["📄 parser_agent.py\nparse()\n─────────────\n_detect_ticket_source()"]
+        subgraph READERS["Readers (one chosen at runtime)"]
+            R_XL["📄 excel_reader.py\nread_excel()\nupdate_status_in_excel()"]
+            R_JR["📄 jira_reader.py\nread_jira_ticket()"]
+            R_AD["📄 ado_reader.py\nread_ado_ticket()"]
+            R_TX["📄 text_reader.py\nread_text()"]
+        end
+        EX["📄 extractor.py\nextract_test_spec()\n─────────────\nGPT-4o call\nJSON → TestSpec"]
+        PA --> READERS
+        R_JR --> EX
+        R_AD --> EX
+        R_TX --> EX
+    end
+
+    %% ── Stage 2 ──────────────────────────────────────
+    subgraph STAGE2["STAGE 2 — RAG CONTEXT"]
+        IDX["📄 indexer.py\nIndexer.index_all()\n─────────────\n_index_code()\n_index_tests()\n_index_knowledge()\n_get_git_last_modified()"]
+        CHK["📄 chunker.py\nchunk_python_file()\n─────────────\nCodeChunk dataclass\n_classify_file()\n_method_signature()"]
+        CDB[("🗄 ChromaDB\nvector_store/\n─────────────\ncode_index\ntest_index\nknow_index")]
+        RET["📄 retriever.py\nRetriever.retrieve()\n─────────────\nRetrievedChunk\nRetrievalResult\nsearch()\nget_page_object_api()\ndetect_conflicts()"]
+        ST["📁 sentence-transformers\nall-MiniLM-L6-v2\n384-dim embeddings"]
+        YAML["📁 knowledge/\nbusiness_rules.yaml\nnavigation_flows.yaml\nuser_types.yaml"]
+    end
+
+    %% ── Stage 3 ──────────────────────────────────────
+    subgraph STAGE3["STAGE 3 — GENERATE"]
+        GA["📄 generator_agent.py\nGeneratorAgent.generate()\n─────────────\n_strip_markdown()\n_check_syntax()\n_determine_filepath()"]
+        PB["📄 prompt_builder.py\nSYSTEM_PROMPT\nbuild_user_message()\n─────────────\nSpec section\nContext section\nTask section"]
+        TL["📄 tools.py\nTOOL_SCHEMAS (4 tools)\ndispatch_tool()\n─────────────\ntool_read_file()\ntool_list_page_methods()\ntool_get_fixtures()\ntool_search_context()"]
+        OAI["☁️ OpenAI\nGPT-4o API\nchat.completions.create()"]
+    end
+
+    %% ── Output artifacts ─────────────────────────────
+    OUT1["📄 test_*_generated.py\n(pytest file)"]
+    OUT2["📊 Excel\nAutomation Status\n→ Automated (green)"]
+
+    %% ── Data flow labels ─────────────────────────────
+    CLI -->|"reads OPENAI_API_KEY"| CFG
+    CLI -->|"parse()"| PA
+    PA -->|"read_excel()"| R_XL
+    R_XL -->|"TestSpec"| PA
+    EX -->|"TestSpec"| PA
+    PA -->|"TestSpec"| CLI
+
+    CLI -->|"Retriever.retrieve()"| RET
+    RET -->|"embed query"| ST
+    ST -->|"embeddings"| CDB
+    IDX -->|"embed + upsert"| CDB
+    IDX -->|"chunk_python_file()"| CHK
+    CHK -->|"CodeChunk[]"| IDX
+    YAML -->|"yaml.safe_load()"| IDX
+    CDB -->|"top-k chunks"| RET
+    RET -->|"RetrievalResult"| CLI
+
+    CLI -->|"generate(TestSpec, RetrievalResult)"| GA
+    GA -->|"build_user_message()"| PB
+    PB -->|"user_message str"| GA
+    GA -->|"SYSTEM_PROMPT + messages"| OAI
+    OAI -->|"tool_calls[]"| GA
+    GA -->|"dispatch_tool()"| TL
+    TL -->|"tool results"| GA
+    TL -->|"search_context()"| RET
+    GA -->|"GenerationResult"| CLI
+
+    CLI -->|"write_text()"| OUT1
+    CLI -->|"update_status_in_excel()"| R_XL
+    R_XL --> OUT2
+
+    MOD -.->|"used by"| PA
+    MOD -.->|"used by"| R_XL
+    MOD -.->|"used by"| EX
+    MOD -.->|"used by"| GA
+    CFG -.->|"OPENAI_API_KEY"| EX
+    CFG -.->|"OPENAI_API_KEY"| GA
+
+    %% ── Styles ───────────────────────────────────────
+    classDef cli     fill:#2d2836,stroke:#bd93f9,color:#f8f8f2,font-weight:bold
+    classDef stage1  fill:#2d2620,stroke:#ffb86c,color:#f8f8f2
+    classDef stage2  fill:#1f2d3d,stroke:#8be9fd,color:#f8f8f2
+    classDef stage3  fill:#2a1f3d,stroke:#bd93f9,color:#f8f8f2
+    classDef store   fill:#1a2535,stroke:#8be9fd,color:#f8f8f2,font-style:italic
+    classDef model   fill:#1f3228,stroke:#50fa7b,color:#f8f8f2
+    classDef out     fill:#1f3228,stroke:#50fa7b,stroke-width:2px,color:#f8f8f2
+    classDef api     fill:#3d1f2a,stroke:#ff79c6,color:#f8f8f2
+    classDef ext     fill:#252535,stroke:#6272a4,color:#cdd6f4
+
+    class CLI cli
+    class MOD model
+    class OUT1,OUT2 out
+    class CDB store
+    class OAI api
+    class ST,YAML ext
+    class PA,R_XL,R_JR,R_AD,R_TX,EX stage1
+    class IDX,CHK,RET stage2
+    class GA,PB,TL stage3
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="dot" style="background:#bd93f9"></div> CLI entry / Config</div>
+    <div class="legend-item"><div class="dot" style="background:#ffb86c"></div> Stage 1 — Parse</div>
+    <div class="legend-item"><div class="dot" style="background:#8be9fd"></div> Stage 2 — RAG</div>
+    <div class="legend-item"><div class="dot" style="background:#bd93f9; opacity:0.7"></div> Stage 3 — Generate</div>
+    <div class="legend-item"><div class="dot" style="background:#ff79c6"></div> External API (OpenAI)</div>
+    <div class="legend-item"><div class="dot" style="background:#50fa7b"></div> Pydantic Models / Outputs</div>
+    <div class="legend-item"><div class="dot" style="background:#6272a4"></div> External libraries</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!--  DIAGRAM 4 — ANTI-HALLUCINATION TOOL LOOP                     -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <span class="tag tag-ll">Low Level</span>
+    Stage 3 — Anti-Hallucination Agentic Tool Loop
+  </div>
+  <div class="section-desc">
+    Deep-dive into how GPT-4o is prevented from inventing method names.
+    The model must verify every page object and fixture before writing code.
+  </div>
+  <div class="mermaid">
+flowchart TD
+    START(["GeneratorAgent.generate()"])
+
+    CHK_CONFLICT{"retrieval\n.has_conflicts()?"}
+    ABORT(["Return GenerationResult\nsuccess=False\nconflicts=[...]"])
+
+    BUILD["prompt_builder.py\nbuild_user_message(spec, retrieval)\n──────────────────────────\n① TestSpec  (TC IDs, steps, ACs)\n② Retrieved context  (real code)\n③ Task instructions  (call tools first!)"]
+
+    INIT_MSG["messages = [\n  system: SYSTEM_PROMPT,\n  user: user_message\n]"]
+
+    API_CALL["GPT-4o\nchat.completions.create()\ntool_choice = auto"]
+
+    CHK_STOP{"finish_reason?"}
+
+    STOP_TOOL["finish_reason\n== tool_calls"]
+    STOP_END["finish_reason\n== stop"]
+
+    subgraph TOOL_EXEC["Tool Execution (tools.py → dispatch_tool)"]
+        T1{"which\ntool?"}
+        T_GF["get_fixtures()\n────────────────\nast.parse(conftest.py)\nfind @pytest.fixture\nreturn names + args"]
+        T_LM["list_page_methods(page_name)\n────────────────\n_find_file(page_name)\nast.parse() → ClassDef\nextract public methods\nreturn sig + docstring"]
+        T_RF["read_file(path)\n────────────────\nPROJECT_ROOT / path\n.read_text()\nreturn raw source"]
+        T_SC["search_context(query, n)\n────────────────\nRetriever.search(query)\nChromaDB semantic search\nreturn top-n chunks"]
+        T1 --> T_GF & T_LM & T_RF & T_SC
+    end
+
+    APPEND["messages.append(\n  assistant_msg,\n  tool_results\n)"]
+
+    ROUND_CHK{"round_num\n< 10?"}
+    MAX_REACHED["Return GenerationResult\nsuccess=False\nerror: max rounds"]
+
+    EXTRACT["Extract text from response\n_strip_markdown(raw_code)"]
+    SYNTAX["_check_syntax(code)\nast.parse() → SyntaxError?"]
+    SYN_FAIL["Return GenerationResult\nsuccess=False\nerror: SyntaxError"]
+    FILEPATH["_determine_filepath(spec)\naffected_pages[0]\n→ test_{page}_generated.py"]
+    WRITE["Path(filepath)\n.write_text(code)\n(unless dry_run)"]
+    UPD_XL["update_status_in_excel()\nopenpyxl write mode\ncell.value = Automated\ncell.fill = GREEN"]
+    DONE(["Return GenerationResult\nsuccess=True ✅\ncode, filepath,\ntool_calls_made,\ntokens_used"])
+
+    START --> CHK_CONFLICT
+    CHK_CONFLICT -->|"Yes"| ABORT
+    CHK_CONFLICT -->|"No"| BUILD
+    BUILD --> INIT_MSG --> API_CALL
+    API_CALL --> CHK_STOP
+    CHK_STOP --> STOP_TOOL & STOP_END
+    STOP_TOOL --> TOOL_EXEC --> APPEND --> ROUND_CHK
+    ROUND_CHK -->|"Yes"| API_CALL
+    ROUND_CHK -->|"No"| MAX_REACHED
+    STOP_END --> EXTRACT --> SYNTAX
+    SYNTAX -->|"Error"| SYN_FAIL
+    SYNTAX -->|"Valid"| FILEPATH --> WRITE --> UPD_XL --> DONE
+
+    classDef start    fill:#2a1f3d,stroke:#bd93f9,color:#f8f8f2,font-weight:bold
+    classDef decision fill:#1f2d3d,stroke:#8be9fd,color:#f8f8f2
+    classDef tool     fill:#2d2620,stroke:#ffb86c,color:#f8f8f2
+    classDef success  fill:#1f3228,stroke:#50fa7b,color:#f8f8f2
+    classDef fail     fill:#3d1f1f,stroke:#ff5555,color:#f8f8f2
+    classDef api      fill:#3d1f2a,stroke:#ff79c6,color:#f8f8f2
+    classDef action   fill:#1e2235,stroke:#6272a4,color:#cdd6f4
+
+    class START start
+    class CHK_CONFLICT,CHK_STOP,T1,ROUND_CHK,SYNTAX decision
+    class T_GF,T_LM,T_RF,T_SC tool
+    class DONE,UPD_XL success
+    class ABORT,MAX_REACHED,SYN_FAIL fail
+    class API_CALL api
+    class BUILD,INIT_MSG,APPEND,EXTRACT,FILEPATH,WRITE,STOP_TOOL,STOP_END action
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      background:       '#181b2e',
+      primaryColor:     '#2d3250',
+      primaryTextColor: '#cdd6f4',
+      primaryBorderColor:'#7c83fd',
+      lineColor:        '#6272a4',
+      secondaryColor:   '#1f3228',
+      tertiaryColor:    '#2a1f3d',
+      edgeLabelBackground: '#1a1d27',
+      fontSize:         '14px',
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+    sequence:  { actorMargin: 60, messageMargin: 20, mirrorActors: false }
+  });
+</script>
+</body>
+</html>
